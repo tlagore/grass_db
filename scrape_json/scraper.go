@@ -83,7 +83,7 @@ func main() {
 
 	c.Visit("https://www.kew.org/data/grasses-db/sppindex.htm")
 	for k, v := range floraMaps {
-		file, err := os.Create(fmt.Sprintf("data/floraData_%s.json", string(k)))
+		file, err := os.Create(fmt.Sprintf("../data/floraData_%s.json", string(k)))
 
 		if err != nil {
 			log.Fatal(err)
