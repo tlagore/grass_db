@@ -2,15 +2,19 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"grass_scraper/db_manager"
 	"io/ioutil"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
 
 var dbManager db_manager.DBManager
 var dataDirectory = "data"
+var digitRegExp = regexp.MustCompile(`\d+[\.]?[\d]*-\d+[\.]?[\d]*`)
 type floraMap map[string]string
 type floraData []floraMap
 
@@ -18,6 +22,16 @@ func main() {
 	dbManager.Initialize("grass_user", os.Getenv("MYSQL_PSW"), "localhost", "grass_db")
 
 	jsonReader, err := readJsons(dataDirectory)
+
+	//min, max := getDigits()
+	//fmt.Println(min)
+	//fmt.Println(max)
+	//fmt.Println("Culms 1–3 cm long" == "Culms 1-3 cm long")
+	//fmt.Println("Culms" == "Culms")
+	//min, max := getDigits("Culms 1–3 cm long")
+	//fmt.Println(min)
+	//fmt.Println(max)
+	//return
 
 	if err != nil {
 		panic(err)
@@ -50,7 +64,8 @@ func parseFloraJson(json floraMap) db_manager.GrassEntry {
 
 	row.GenusSpecies = json["Name"]
 	for key, val := range json {
-		json[key] = strings.Replace(val, "\n", " ", -1)
+		// replace all new lines with spaces and replace odd unicode character with regular dash
+		json[key] = strings.Replace(strings.Replace(val, "\n", " ", -1), "–", "-", -1)
 	}
 	parseHabit(json["HABIT"], &row)
 
@@ -59,9 +74,37 @@ func parseFloraJson(json floraMap) db_manager.GrassEntry {
 
 func parseHabit(fieldData string, row *db_manager.GrassEntry) {
 	fields := strings.Split(fieldData, ". ")
-	for field := range fields {
-		print(field)
+	for _, field := range fields {
+		pieces := strings.Split(field, ";")
+		if strings.HasPrefix(field, "Culms") {
+			parseCulms(pieces, row)
+		}
 	}
+}
+
+func parseCulms(culmParts []string, row *db_manager.GrassEntry) {
+	for _, part := range culmParts {
+		if strings.Contains(part, "diam") {
+			row.CulmDiameterMinMm, row.CulmDiameterMaxMm = getDigits(part)
+		}else if strings.Contains(part, "long") {
+			row.CulmLengthMinCm, row.CulmLengthMaxCm = getDigits(part)
+		}
+	}
+}
+
+func getDigits(str string) (int, int) {
+	var min, max = 0, 0
+	findStr := digitRegExp.FindAllString(str, 1)
+	fmt.Println(digitRegExp.String())
+	if len(findStr) == 1 {
+		digits := strings.Split(findStr[0], "-")
+		if len(digits) == 2 {
+			min, _ = strconv.Atoi(digits[0])
+			max, _ = strconv.Atoi(digits[1])
+		}
+	}
+
+	return min, max
 }
 
 func readJsons(dir string) (<- chan floraMap, error) {
