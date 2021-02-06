@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"grass_scraper/util"
 	"log"
 	"os"
 	"time"
@@ -60,13 +61,13 @@ func main() {
 		}
 
 		for _, val := range childTexts {
-			spaceIdx := getCharAt(val, ' ')
+			spaceIdx := util.GetCharAt(val, ' ')
 			if spaceIdx == -1 {
 				continue
 			} else
 			{
 				title := val[0:spaceIdx]
-				if contains(floraDescriptors, title, true) {
+				if util.Contains(floraDescriptors, title, true) {
 					if title == "FERTILE" {
 						title = "FERTILE SPIKELETS"
 					}

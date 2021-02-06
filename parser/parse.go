@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"grass_scraper/db_manager"
 	"io/ioutil"
 	"os"
@@ -10,31 +9,69 @@ import (
 )
 
 
-/*
-db, err := sql.Open("mysql", "user:password@/dbname")
-if err != nil {
-panic(err)
-}
-// See "Important settings" section.
-db.SetConnMaxLifetime(time.Minute * 3)
-db.SetMaxOpenConns(10)
-db.SetMaxIdleConns(10)
- */
-
 var dbManager db_manager.DBManager
-var fileLoc = "..\\data"
+var dataDirectory = "data"
 type floraMap map[string]string
 type floraData []floraMap
 
 func main() {
 	dbManager.Initialize("grass_user", os.Getenv("MYSQL_PSW"), "localhost", "grass_db")
 
-	files := getFiles(fileLoc)
+	jsonReader, err := readJsons(dataDirectory)
+
+	if err != nil {
+		panic(err)
+	}
+
+	for json := range jsonReader {
+		// idx, value. Value = a
+		row := parseFloraJson(json)
+		return
+		dbManager.InsertRow(row)
+	}
+}
+
+func parseFloraJson(json floraMap) db_manager.GrassEntry {
+	var row db_manager.GrassEntry
+
+	/*
+	var floraDescriptors = []string {
+		"DISTRIBUTION",
+		"FERTILE SPIKELETS",
+		"FLORETS",
+		"FLOWER",
+		"FRUIT",
+		"GLUMES",
+		"HABIT",
+		"INFLORESCENCE",
+		"NOTES",
+	}
+	*/
+
+	row.GenusSpecies = json["Name"]
+	for key, val := range json {
+		json[key] = strings.Replace(val, "\n", " ", -1)
+	}
+	parseHabit(json["HABIT"], &row)
+
+	return row
+}
+
+func parseHabit(fieldData string, row *db_manager.GrassEntry) {
+	fields := strings.Split(fieldData, ". ")
+	for field := range fields {
+		print(field)
+	}
+}
+
+func readJsons(dir string) (<- chan floraMap, error) {
+	files := GetFiles(dir)
+	channel := make(chan floraMap)
+
 	for _, file := range files {
 		fileName := file.Name()
-		fullPath := strings.Join([]string{fileLoc, fileName}, "\\")
-		fmt.Println(fullPath)
-		data := getFileData(fullPath)
+		fullPath := strings.Join([]string{dir, fileName}, "\\")
+		data := GetFileData(fullPath)
 		var parsedData floraData
 		err := json.Unmarshal(data, &parsedData)
 
@@ -43,18 +80,19 @@ func main() {
 		}
 
 		// remove new line from all the fields
-		// idx, value. Value = A single floraMap
-		for idx, v := range parsedData {
-			// idx, value. Value = a
-			for key, val := range v {
-				parsedData[idx][key] = strings.Replace(val, "\n", "", -1)
-				fmt.Println(parsedData[idx][key])
+		// idx, v. Value = A single floraMap
+		go func() {
+			for _, v := range parsedData {
+				channel <- v
 			}
-		}
+			close(channel)
+		}()
 	}
+
+	return channel, nil
 }
 
-func getFiles(directory string) []os.FileInfo {
+func GetFiles(directory string) []os.FileInfo {
 	files, err := ioutil.ReadDir(directory)
 
 	if err != nil {
@@ -64,7 +102,7 @@ func getFiles(directory string) []os.FileInfo {
 	return files
 }
 
-func getFileData(fileName string) []byte {
+func GetFileData(fileName string) []byte {
 	data, err := ioutil.ReadFile(fileName)
 
 	if err != nil {

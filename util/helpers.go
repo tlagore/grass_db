@@ -1,8 +1,8 @@
-package main
+package util
 
 import "strings"
 
-func getCharAt(s string, ch byte) int {
+func GetCharAt(s string, ch byte) int {
 	i := -1
 
 	for index, _ := range s {
@@ -14,7 +14,7 @@ func getCharAt(s string, ch byte) int {
 	return i
 }
 
-func contains(lst []string, s string, ignoreCase bool) bool {
+func Contains(lst []string, s string, ignoreCase bool) bool {
 	if ignoreCase {
 		s = strings.ToLower(s)
 	}

@@ -36,7 +36,7 @@ func (manager DBManager) Initialize(user string, psw string, uri string, db stri
 	manager.Initialized = true
 }
 
-func (manager DBManager) Connect() *sql.DB {
+func (manager DBManager) connect() *sql.DB {
 	if !manager.Initialized {
 		panic("DBManager is not yet initialized.")
 	}
@@ -54,4 +54,9 @@ func (manager DBManager) Connect() *sql.DB {
 	conn.SetMaxIdleConns(10)
 
 	return conn
+}
+
+func (manager DBManager) InsertRow(row GrassEntry) {
+	//conn := manager.connect()
+	//defer conn.Close()
 }
