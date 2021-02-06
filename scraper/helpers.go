@@ -2,14 +2,6 @@ package main
 
 import "strings"
 
-type Case int
-
-const (
-	Lower Case = iota
-	Upper
-	IgnoreCase
-)
-
 func getCharAt(s string, ch byte) int {
 	i := -1
 
