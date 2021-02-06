@@ -1,7 +1,13 @@
-module grass_scraper/parse_json
+module grassscraper.ty/parser
 
 go 1.15
 
-replace grass_scraper/db_manager => ../db_manager
+replace (
+	grassscraper.ty/db_manager => ../db_manager
+	grassscraper.ty/util => ../util
+)
 
-require grass_scraper/db_manager v0.0.0-00010101000000-000000000000
+require (
+	grassscraper.ty/db_manager v0.0.0-00010101000000-000000000000
+	grassscraper.ty/util v0.0.0-00010101000000-000000000000
+)

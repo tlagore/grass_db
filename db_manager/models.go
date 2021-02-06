@@ -3,6 +3,7 @@ package db_manager
 type GrassEntry struct {
 	GenusSpecies string
 	IsPerennial bool
+	IsAnnual bool
 	CulmDensity string
 	RootingCharactersitic string
 	CulmGrowth string

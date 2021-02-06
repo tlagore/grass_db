@@ -1,4 +1,4 @@
-module grass_scraper/db_manager
+module grassscraper.ty/db_manager
 
 go 1.15
 
