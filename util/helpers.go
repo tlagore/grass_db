@@ -1,6 +1,9 @@
 package util
 
-import "strings"
+import (
+	"os"
+	"strings"
+)
 
 func GetCharAt(s string, ch byte) int {
 	i := -1
@@ -12,6 +15,13 @@ func GetCharAt(s string, ch byte) int {
 	}
 
 	return i
+}
+
+func DirExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil { return true, nil }
+	if os.IsNotExist(err) { return false, nil }
+	return false, err
 }
 
 func Contains(lst []string, s string, ignoreCase bool) bool {

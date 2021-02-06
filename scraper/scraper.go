@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"grass_scraper/util"
+	"grassscraper.ty/util"
 	"log"
 	"os"
 	"time"
