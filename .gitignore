@@ -5,9 +5,9 @@
 *.so
 *.dylib
 
-/data/*
-/cache/*
-/.idea/*
+grass_scraper/data/*
+grass_scraper/cache/*
+grass_scraper/.idea/*
 
 # Test binary, built with `go test -c`
 *.test
