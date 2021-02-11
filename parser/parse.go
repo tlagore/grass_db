@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"grassscraper.ty/db_manager"
 	"io/ioutil"
@@ -15,15 +16,30 @@ import (
 
 var dbManager db_manager.DBManager
 var dataDirectory = "data"
+var bambooSpeciesFile = "bamboo_species.txt"
+var bracketedDigit = regexp.MustCompile(`[\d]+`)
 var notDigit = regexp.MustCompile(`[^\d]*`)
+var digits = regexp.MustCompile(`\d+[.]?[\d]*`)
 var digitRegExp = regexp.MustCompile(`\d+[\.]?[\d]*-\d+[\.]?[\d]*`)
 type floraMap map[string]string
 type floraData []floraMap
-// var parsedData []db_manager.GrassEntry
 
+
+/*
+ Parse grass db jsons into database
+ */
 func main() {
+
 	runtime.GOMAXPROCS(30)
 	dbManager.Initialize("grass_user", os.Getenv("MYSQL_PSW"), "tcp(localhost:3306)", "grass_db")
+	if !dbManager.TableExists("grass_table") {
+		panic("grass_table does not exist on given connection! Create it with create_schema.sql first.")
+	}
+
+	if !dbManager.TableExists("bamboo_species") {
+		panic ("bamboo_table does not exist on given connection! Create it with create_schema.sql first.")
+	}
+	parseBambooFile(bambooSpeciesFile)
 
 	jsonReader, err := readJsons(dataDirectory)
 
@@ -34,11 +50,56 @@ func main() {
 	// idx := 0
 	for jsonData := range jsonReader {
 		row := parseFloraJson(jsonData)
-		// parsedData = append(parsedData, row)
-		insertError := dbManager.InsertRow(&row)
+
+		insertError := dbManager.InsertGrassRow(&row)
 		if insertError != nil {
 			log.Printf("%s", insertError)
 		}
+	}
+}
+
+func parseBambooSpecies(line string) db_manager.BambooEntry {
+	var row db_manager.BambooEntry
+
+	if strings.Contains(line, "+") {
+		row.IsInvasive = true
+		line = strings.Replace(line, "+", "", 1)
+	}
+
+	if strings.Contains(line, "*") {
+		findStr := bracketedDigit.FindString(line)
+		if findStr != "" {
+			row.NumIntroductions, _ = strconv.Atoi(findStr)
+			line = strings.Replace(line, "("+findStr+")", "", 1)
+		}
+
+		line = strings.Replace(line, "*",  "",1)
+	}
+
+	if strings.Contains(line, "?") {
+		row.DisputedNativeRange = true
+		line = strings.Replace(line, "?", "", 1)
+	}
+
+	line = strings.Trim(line, " ")
+	row.GenusSpecies = line
+	return row
+}
+
+func parseBambooFile(fileName string) {
+	readFile, err := os.Open(fileName)
+	if err != nil {
+		log.Fatalf("failed to open file: %s", err)
+	}
+
+	defer readFile.Close()
+
+	fileScanner := bufio.NewScanner(readFile)
+	fileScanner.Split(bufio.ScanLines)
+
+	for fileScanner.Scan() {
+		row := parseBambooSpecies(fileScanner.Text())
+		dbManager.InsertBambooRow(&row, "bamboo_species")
 	}
 }
 
@@ -49,7 +110,7 @@ func parseFloraJson(json floraMap) db_manager.GrassEntry {
 		// replace all new lines with spaces and replace odd unicode character with regular dash
 		json[key] = strings.Replace(strings.Replace(val, "\n", " ", -1), "–", "-", -1)
 	}
-	row.GenusSpecies = json["Name"]
+	row.GrassSpecies = json["Name"]
 	parseHabit(strings.ToLower(json["HABIT"]), &row)
 	parseLocation(strings.ToLower(json["DISTRIBUTION"]), &row)
 	row.Notes = strings.Replace(json["NOTES"], "NOTES ", "", 1)
@@ -65,13 +126,27 @@ func parseLocation(fieldData string, row *db_manager.GrassEntry) {
 	locationBroad := ""
 	for _, location := range locations {
 		location = strings.Trim(location, " ")
-		if strings.Contains(location, ":") {
-			locParts := strings.Split(location, ":")
-			locationNarrow += strings.Trim(locParts[0], " ") + "; "
-			locationBroad += parseDefHelper(locParts[1:len(locParts)], 0) + "; "
-		} else {
-			locationBroad += fieldData + "; "
-			locationBroad = fieldData
+
+		if location != "" {
+			if strings.Contains(location, ":") {
+				locParts := strings.Split(location, ":")
+				if locationNarrow != "" {
+					locationNarrow += "; "
+				}
+
+				if locationBroad != "" {
+					locationBroad += "; "
+				}
+
+				locationNarrow += strings.Trim(locParts[0], " ")
+				locationBroad += parseDefHelper(locParts[1:len(locParts)], 0)
+			} else {
+				if locationBroad != "" {
+					locationBroad += "; "
+				}
+				locationBroad += fieldData
+				locationBroad = fieldData
+			}
 		}
 	}
 
@@ -182,7 +257,7 @@ func parseCulms(field string, row *db_manager.GrassEntry) {
 
 	for _, part := range culmParts {
 		// Try to extract
-		if strings.Contains(part, "diam") {
+		if strings.Contains(part, "diam") || strings.Contains(part, "wide") {
 			row.CulmDiameterMinMm, row.CulmDiameterMaxMm = getDigits(part)
 		}else if strings.Contains(part, "long") {
 			row.CulmLengthMinCm, row.CulmLengthMaxCm = getDigits(part)
@@ -211,14 +286,23 @@ func parseCulmDef(field string, row *db_manager.GrassEntry) {
 	}
 }
 
-func getDigits(str string) (int, int) {
-	var min, max = 0, 0
-	findStr := digitRegExp.FindAllString(str, 1)
-	if len(findStr) == 1 {
-		digits := strings.Split(findStr[0], "-")
-		if len(digits) == 2 {
-			min, _ = strconv.Atoi(digits[0])
-			max, _ = strconv.Atoi(digits[1])
+func getDigits(str string) (float64, float64) {
+	var min, max = 0.0, 0.0
+
+	if strings.Contains(str, "-") {
+		findStr := digitRegExp.FindAllString(str, 1)
+		if len(findStr) == 1 {
+			digits := strings.Split(findStr[0], "-")
+			if len(digits) == 2 {
+				min, _ = strconv.ParseFloat(digits[0],64)
+				max, _ = strconv.ParseFloat(digits[1],64)
+			}
+		}
+	} else {
+		findStr := digits.FindAllString(str, 1)
+		if len(findStr) == 1 {
+			min, _ = strconv.ParseFloat(findStr[0], 64)
+			max = min
 		}
 	}
 
@@ -245,12 +329,12 @@ func readJsons(dir string) (<- chan floraMap, error) {
 		wg.Add(1)
 
 		// v = A single floraMap
-		go func(waitGroup *sync.WaitGroup) {
+		go func() {
 			defer wg.Done()
 			for _, v := range parsedData {
 				channel <- v
 			}
-		}(wg)
+		}()
 	}
 
 	// when all producers are done, close the channel
