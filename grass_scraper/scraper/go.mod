@@ -2,7 +2,7 @@ module scraper
 
 go 1.15
 
-replace grassscraper.ty/util => ../util
+replace grassscraper.ty/util => ./../../common/util
 
 require (
 	github.com/gocolly/colly/v2 v2.1.0
